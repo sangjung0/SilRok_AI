@@ -7,8 +7,14 @@ services:
         shm_size: "36gb"
         volumes:
             - ../:/workspaces/dev
-            - ../.model/huggingface:/root/.cache/huggingface
-            - ../.model/torch:/root/.cache/torch
+
+            #   - ../.model/huggingface:/root/.cache/huggingface
+            - F:/Models/huggingface:/home/vscode/.cache/huggingface
+            #   - ../.model/torch:/root/.cache/torch
+            - F:/Models/torch:/home/vscode/.cache/torch
+
+            - C:/Env/python/Silrok-AI:/workspaces/dev/.venv
+            # - /workspaces/dev/.venv # no cache
         deploy:
             resources:
                 reservations:

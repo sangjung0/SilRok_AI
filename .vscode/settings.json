@@ -1,12 +1,17 @@
 {
-    "python.defaultInterpreterPath": "/usr/bin/python3",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "code-runner.runInTerminal": true,
+    "code-runner.executorMap": {
+        "python":"zsh -c 'set -a && source $workspaceRoot/.env && exec $workspaceRoot/.venv/bin/python -u $fullFileName'"
+    },
     "editor.wordWrap": "on",
     "editor.wrappingIndent": "indent",
-    "jupyter.notebookFileRoot": "/workspaces/dev",
+    "jupyter.notebookFileRoot": "${workspaceFolder}",
     "python.envFile": "${workspaceFolder}/.env",
     "python.analysis.exclude": [
         "**/__pycache__",
         "**/.git",
+        ".venv",
         ".devcontainer",
         ".vscode",
         ".github",
@@ -21,7 +26,7 @@
     "files.watcherExclude": {
         "**/.git/objects/**": true,
         "**/.git/subtree-cache/**": true,
-        "**/.hg/store/**": true
+        "**/.hg/store/**": true,
     },
     "cSpell.words": [
         "afut",

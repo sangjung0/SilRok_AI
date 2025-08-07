@@ -9,9 +9,9 @@
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "justMyCode": true,
-            "env": {
-                "PYTHONPATH":"${workspaceFolder}/app"
-            }
+            // "env": {
+            //     "PYTHONPATH":"${workspaceFolder}/app:${workspaceFolder}/RTWhisper/modules"
+            // }
         },
         {
             "name": "Debug Current Python File",
@@ -21,9 +21,9 @@
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "justMyCode": true,
-            "env": {
-                "PYTHONPATH":"${workspaceFolder}/app:${workspaceFolder}/RTWhisper/modules"
-            }
-        }
+            // "env": {
+            //     "PYTHONPATH":"${workspaceFolder}/app:${workspaceFolder}/RTWhisper/modules"
+            // }
+        },
     ]
 }
