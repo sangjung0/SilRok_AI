@@ -1,4 +1,0 @@
-[submodule "RTWhisper"]
-	path = RTWhisper
-	url = https://github.com/sangjung0/RT-Whisper.git
-	branch = Develop
