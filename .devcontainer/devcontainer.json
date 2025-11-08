@@ -1,10 +1,16 @@
 {
-    "name": "SilRok AI Server",
+    "name": "SilRok_AI_Server",
     "dockerComposeFile": "./docker-compose.yml",
     "service": "dev",
     "workspaceFolder": "/workspaces/dev",
-    "remoteUser": "vscode",
-    "postCreateCommand": "bash /workspaces/dev/.devcontainer/scripts/post_create_command.sh vscode",
+    "postCreateCommand": "bash /workspaces/dev/.devcontainer/sjsh/sync_uv.sh ${CONTAINER_WORK_DIR} ${CONTAINER_HOME} ${CONTAINER_UV_GROUP}",
+
+    // for linux container
+    // "initializeCommand": "[ ! -d ${localWorkspaceFolder}/.devcontainer/sjsh ] && git clone --branch LID https://github.com/sangjung0/sjsh.git ${localWorkspaceFolder}/.devcontainer/sjsh || true",
+
+    // for windows container
+    "initializeCommand": "cd /d ${localWorkspaceFolder} && if not exist .devcontainer/sjsh git clone --branch LID https://github.com/sangjung0/sjsh.git .devcontainer/sjsh",
+
     "features": {
         "ghcr.io/devcontainers/features/github-cli:1": {}
     },
@@ -25,7 +31,6 @@
                 "oderwat.indent-rainbow",
                 "visualstudioexptteam.vscodeintellicode",
                 "ionutvmi.path-autocomplete",
-                "demystifying-javascript.python-extensions-pack",
                 "mgesbert.python-path",
                 "foxundermoon.shell-format",
                 "gruntfuggly.todo-tree",

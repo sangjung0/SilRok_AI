@@ -1,0 +1,12 @@
+[submodule "modules/LID"]
+	path = modules/LID
+	url = https://github.com/sangjung0/LID.git
+	branch = feature/SilRok
+[submodule "modules/sjpy"]
+	path = modules/sjpy
+	url = https://github.com/sangjung0/sjpy.git
+	branch = feature/SilRok
+[submodule "modules/sjaipy"]
+	path = modules/sjaipy
+	url = https://github.com/sangjung0/sjaipy.git
+	branch = feature/SilRok

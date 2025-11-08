@@ -1,35 +1,54 @@
-FROM nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
 
-ARG USER=vscode
-ARG USER_UID=1001
+ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-lc"]
 
-RUN apt-get update \
-    && apt-get upgrade -y \
-    && apt-get install -y \
+# INSTALL DEPENDENCIES
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     git \
     sudo \
     zsh \
     curl \
-    ffmpeg \
-    openjdk-17-jdk \
-    graphviz \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -u ${USER_UID} -m -s /usr/bin/zsh ${USER} \
-    && echo "${USER} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/${USER} \
-    && chmod 0440 /etc/sudoers.d/${USER}
+# INSTALL ADDITIONAL DEPENDENCIES
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
+    # LIA
+    ffmpeg \
+    # setup_mecab_kor.sh dependencies
+    autoconf automake build-essential libtool \
+    # pyannote
+    libportaudio2 \
+    # graphviz
+    openjdk-17-jdk graphviz \
+    && rm -rf /var/lib/apt/lists/*
 
-USER ${USER}
-WORKDIR /home/${USER}
+# LOAD SCRIPT
+COPY .devcontainer/sjsh /tmp/scripts
+RUN chmod -R +x /tmp/scripts/*.sh
 
-RUN curl -LsSf https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | sh
-ARG OHMYZSH_THEME=/home/${USER}/.oh-my-zsh/custom/themes
+# ADD USER AND SETUP ZSH
+ARG CONTAINER_USER
+ARG CONTAINER_UID
+ARG CONTAINER_HOME
+RUN /tmp/scripts/add_user_and_setup_sudo.sh ${CONTAINER_USER} ${CONTAINER_UID}
+RUN /tmp/scripts/setup_zsh.sh ${CONTAINER_USER} ${CONTAINER_UID} ${CONTAINER_HOME}
 
-RUN <<EOT
-    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${OHMYZSH_THEME}/powerlevel10k
-    sed -i 's|ZSH_THEME="devcontainers"|ZSH_THEME="powerlevel10k/powerlevel10k"|g' .zshrc
-    echo 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true' >> .zshrc
-EOT
+# INSTALL UV
+RUN sudo -u ${CONTAINER_USER} curl -LsSf https://astral.sh/uv/install.sh | sudo -u ${CONTAINER_USER} sh
+RUN sudo -u ${CONTAINER_USER} -H env PATH="${CONTAINER_HOME}/.local/bin:$PATH"
 
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-RUN echo '. $HOME/.local/bin/env' >> .zshrc
+# INSTALL MECAB KOR
+RUN /tmp/scripts/setup_mecab_kor.sh
+
+# INSTALL UV
+RUN sudo -u ${CONTAINER_USER} curl -LsSf https://astral.sh/uv/install.sh | sudo -u ${CONTAINER_USER} sh
+RUN sudo -u ${CONTAINER_USER} -H env PATH="${CONTAINER_HOME}/.local/bin:$PATH"
+
+# CLEANUP
+RUN rm -rf /tmp/* || true
+
+# FINALIZE
+USER ${CONTAINER_USER}

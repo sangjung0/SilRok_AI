@@ -1,27 +1,120 @@
-name: SilRokAI-Dev
+name: ${CONTAINER_NAME}
 services:
     dev:
+        shm_size: 32gb
         build:
             context: ..
             dockerfile: .devcontainer/Dockerfile
-        shm_size: "36gb"
+            args:
+                CONTAINER_USER: ${CONTAINER_USER}
+                CONTAINER_UID: ${CONTAINER_UID}
+                CONTAINER_HOME: ${CONTAINER_HOME}
+        environment:
+            CONTAINER_USER: ${CONTAINER_USER}
+            CONTAINER_UID: ${CONTAINER_UID}
+            CONTAINER_HOME: ${CONTAINER_HOME}
+            CONTAINER_WORK_DIR: ${CONTAINER_WORK_DIR}
+            CONTAINER_UV_GROUP: ${CONTAINER_UV_GROUP}
+            TZ: ${TZ}
         volumes:
-            - ../:/workspaces/dev
+            - ../:${CONTAINER_WORK_DIR}
+            - venv:${CONTAINER_WORK_DIR}/.venv
 
-            #   - ../.model/huggingface:/root/.cache/huggingface
-            - F:/Models/huggingface:/home/vscode/.cache/huggingface
-            #   - ../.model/torch:/root/.cache/torch
-            - F:/Models/torch:/home/vscode/.cache/torch
+            - uv_cache:${CONTAINER_HOME}/.cache/uv:rw
+            - huggingface_cache:${CONTAINER_HOME}/.cache/huggingface
+            - torch_cache:${CONTAINER_HOME}/.cache/torch
+            - fasttext_cache:${CONTAINER_HOME}/.cache/fasttext
+            - whisper_cache:${CONTAINER_HOME}/.cache/whisper
 
-            - C:/Env/python/Silrok-AI:/workspaces/dev/.venv
-            # - /workspaces/dev/.venv # no cache
+            # dataset
+            - datasets:${CONTAINER_WORK_DIR}/.datasets:ro
+            - datasets_ami:${CONTAINER_WORK_DIR}/.datasets/ami:rw
+            - datasets_tedlium:${CONTAINER_WORK_DIR}/.datasets/tedlium:rw
+            - datasets_vox_populi:${CONTAINER_WORK_DIR}/.datasets/vox_populi:rw
+            - datasets_libri_speech:${CONTAINER_WORK_DIR}/.datasets/libri_speech:rw
+
+            # storage
+            - storage_silrok_ai:${CONTAINER_WORK_DIR}/.storage:rw
         deploy:
             resources:
                 reservations:
                     devices:
                         - driver: nvidia
-                          count: 1
+                          device_ids: ["${CONTAINER_GPU_ID}"]
                           capabilities: [gpu]
         ports:
-            - "8000:8000"
+            - ${HOST_PORT}:${CONTAINER_PORT}
         command: ["tail", "-f", "/dev/null"]
+
+volumes:
+    venv:
+        driver: local
+    uv_cache:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/cache/uv
+    huggingface_cache:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/cache/huggingface
+    torch_cache:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/cache/torch
+    fasttext_cache:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/cache/fasttext
+    whisper_cache:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/cache/whisper
+    datasets:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/datasets
+    datasets_ami:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/datasets/ami
+    datasets_tedlium:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/datasets/tedlium
+    datasets_vox_populi:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/datasets/vox_populi
+    datasets_libri_speech:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/datasets/libri_speech
+    storage_silrok_ai:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/storage/silrok_ai
+
+
+
