@@ -184,3 +184,5 @@ nginx/certbot/www/**
 nginx/*.ini
 
 .datasets
+.storage
+.keys

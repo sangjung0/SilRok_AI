@@ -5,7 +5,7 @@
             "name": "Debug Main Python File",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/app/main.py",
+            "program": "${workspaceFolder}/SilRok/main.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "justMyCode": true,

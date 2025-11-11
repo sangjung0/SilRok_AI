@@ -5,9 +5,15 @@ description = "SilRok AI"
 readme = "README.md"
 requires-python = "==3.10.*"
 dependencies = [
+    "dependency-injector>=4.48.2",
+    "fastapi>=0.121.0",
+    "google-auth>=2.43.0",
+    "google-cloud-aiplatform>=1.126.1",
     "LID",
+    "python-multipart>=0.0.20",
     "sjaipy",
-    "sjpy"
+    "sjpy",
+    "uvicorn>=0.38.0",
 ]
 
 [dependency-groups]

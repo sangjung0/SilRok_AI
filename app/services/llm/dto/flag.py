@@ -1,5 +1,0 @@
-DONE = "DONE"
-REQUEST = "REQUEST"
-UPDATE = "UPDATE"
-
-__all__ = ["DONE", "REQUEST", "UPDATE"]

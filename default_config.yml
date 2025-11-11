@@ -1,0 +1,35 @@
+SilRok:
+    server:
+        name: SilRok AI Server
+        version: 2.0.0
+    log:
+        level: 20 # INFO: 20, DEBUG: 10
+        file_log_level: 10
+        path: ${LOG_DIR:./log}
+
+    api:
+        hf_token: ${HF_TOKEN}
+        google_api_key: ${GOOGLE_API_KEY}
+
+    service:
+        common:
+            sample_rate: 16000
+            embedding_length: 1024 # 256 * 4 (float32)
+        llm_service:
+            google_cloud_project_id: ${GOOGLE_CLOUD_PROJECT_ID}
+            google_cloud_location: ${GOOGLE_CLOUD_LOCATION}
+            google_cloud_service_account_path: ${GOOGLE_CLOUD_SERVICE_ACCOUNT_PATH}
+            max_storage_size: 1000
+            max_cache_size: 3000
+            logger:
+                level: 10
+                path: ${LOG_DIR:./log}
+                file_log_level: 10
+        lid_service:
+            diarizer_job_num: 2
+            asr_job_num: 2
+            minimum_chunk_duration: 48000
+            inactive_sec: 10
+        session:
+            max_connection: 5
+            max_send_queue_size: 100

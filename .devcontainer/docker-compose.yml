@@ -19,6 +19,7 @@ services:
         volumes:
             - ../:${CONTAINER_WORK_DIR}
             - venv:${CONTAINER_WORK_DIR}/.venv
+            - keys:${CONTAINER_WORK_DIR}/.keys:ro
 
             - uv_cache:${CONTAINER_HOME}/.cache/uv:rw
             - huggingface_cache:${CONTAINER_HOME}/.cache/huggingface
@@ -49,6 +50,12 @@ services:
 volumes:
     venv:
         driver: local
+    keys:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${API_KEY_PATH}
     uv_cache:
         driver: local
         driver_opts:
