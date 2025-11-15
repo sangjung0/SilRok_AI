@@ -1,16 +1,79 @@
-name: SilRokAI
+name: ${CONTAINER_NAME}
 services:
     app:
+        shm_size: 32gb
+        user: ${CONTAINER_UID}:${CONTAINER_UID}
         build:
             context: .
             dockerfile: Dockerfile
-        shm_size: "36gb"
+            args:
+                CONTAINER_USER: ${CONTAINER_USER}
+                CONTAINER_UID: ${CONTAINER_UID}
+                CONTAINER_HOME: ${CONTAINER_HOME}
+                CONTAINER_WORK_DIR: ${CONTAINER_WORK_DIR}
+        environment:
+            CONTAINER_USER: ${CONTAINER_USER}
+            CONTAINER_UID: ${CONTAINER_UID}
+            CONTAINER_HOME: ${CONTAINER_HOME}
+            CONTAINER_WORK_DIR: ${CONTAINER_WORK_DIR}
+            CONTAINER_UV_GROUP: ${CONTAINER_UV_GROUP}
+            TZ: ${TZ}
+        volumes:
+            - ./:${CONTAINER_WORK_DIR}
+            - venv:${CONTAINER_WORK_DIR}/.venv
+            - keys:${CONTAINER_WORK_DIR}/.keys:ro
+
+            - uv_cache:${CONTAINER_HOME}/.cache/uv:rw
+            - huggingface_cache:${CONTAINER_HOME}/.cache/huggingface
+            - torch_cache:${CONTAINER_HOME}/.cache/torch
+            - fasttext_cache:${CONTAINER_HOME}/.cache/fasttext
+            - whisper_cache:${CONTAINER_HOME}/.cache/whisper
         deploy:
             resources:
                 reservations:
                     devices:
                         - driver: nvidia
-                          count: 1
+                          device_ids: ["${CONTAINER_GPU_ID}"]
                           capabilities: [gpu]
         ports:
-            - "8080:8000"
+            - ${HOST_PORT}:${CONTAINER_PORT}
+
+volumes:
+    venv:
+        driver: local
+    keys:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${API_KEY_PATH}
+    uv_cache:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/cache/uv
+    huggingface_cache:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/cache/huggingface
+    torch_cache:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/cache/torch
+    fasttext_cache:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/cache/fasttext
+    whisper_cache:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${CONTAINER_VOLUME}/cache/whisper

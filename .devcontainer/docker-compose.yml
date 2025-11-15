@@ -1,7 +1,8 @@
 name: ${CONTAINER_NAME}
 services:
-    dev:
+    service:
         shm_size: 32gb
+        user: ${CONTAINER_UID}:${CONTAINER_UID}
         build:
             context: ..
             dockerfile: .devcontainer/Dockerfile
