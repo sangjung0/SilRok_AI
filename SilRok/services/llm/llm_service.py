@@ -5,7 +5,7 @@ from typing import Callable
 from typing_extensions import Self, override
 from dependency_injector.resources import AsyncResource
 
-from sjpy.asynchronous import callback_waiter
+from sjpy.asynchronous import spawn_task_with_callback
 
 from SilRok.services.llm.llm import LLM
 from SilRok.services.llm.data import LLMInput, LLMOutput
@@ -57,10 +57,18 @@ class LLMService(AsyncResource):
         X: LLMInput,
         callback: Callable[[LLMOutput | None, Exception | None], None],
     ) -> None:
-        callback_waiter(self.request(X), callback, self.logger)
+        spawn_task_with_callback(self.request(X), callback, self.logger)
 
     async def request(self, X: LLMInput) -> LLMOutput | None:
-        return await self.llm.request.remote(X)
+        assert isinstance(X, LLMInput), "X must be an instance of LLMInput"
+
+        result = await self.llm.request.remote(X)
+
+        assert (
+            isinstance(result, LLMOutput) or result is None
+        ), "result must be an instance of LLMOutput or None"
+
+        return result
 
 
 __all__ = ["LLMService"]

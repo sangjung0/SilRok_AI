@@ -11,7 +11,7 @@ from sjpy.collection import to_namespace
 
 DEFAULT_CONFIG_FILE = "default_config.yml"
 DEFAULT_HEAD = "SilRok"
-DEFAULT_NAME = "SilRok"
+DEFAULT_NAME = "fastapi"
 
 package_path = get_top_package_root()
 working_dir = Path.cwd()

@@ -8,13 +8,26 @@ from dependency_injector.resources import AsyncResource
 from logging import Logger
 
 from LID import LID, SpeakerSentence
+from LID.asr import Sentence
 from sjpy.audio import generate_empty_chunk
+from sjpy.asynchronous import (
+    spawn_task_with_callback,
+    spawn_task_queue_worker,
+    task_with_callback,
+)
 
+StreamCallbackWrapper: TypeAlias = Callable[
+    [
+        Optional[tuple[list[SpeakerSentence], list[SpeakerSentence]]],
+        Optional[Exception],
+    ],
+    Awaitable[None],
+]
 StreamCallback: TypeAlias = Callable[
     [Optional["LIDSentence"], Optional[Exception]], Awaitable[None]
 ]
 EmbedCallback: TypeAlias = Callable[
-    [Optional[np.ndarray], Optional[Exception]], Awaitable[None]
+    [Optional["Embedding"], Optional[Exception]], Awaitable[None]
 ]
 
 
@@ -38,14 +51,32 @@ class User:
     just_me: bool = field(compare=False)  # 화자 분리 없이, 소스 오디오 = 화자일 경우
     chunk: np.ndarray = field(default_factory=generate_empty_chunk, compare=False)
     # 여기 콜백 등록하는게 별로긴한데, 요청마다 응답이 가는게 아니기 때문에, 어쩔 수 없다.
-    callback: StreamCallback | None = field(default=None, compare=False)
+    callback: StreamCallbackWrapper | None = field(default=None, compare=False)
+    # 일단 큐 크기제한 하지 않음
+    queue: asyncio.Queue[Awaitable | None] = field(
+        default_factory=asyncio.Queue, repr=False, compare=False
+    )
+    stop_event: asyncio.Event = field(
+        default_factory=asyncio.Event, repr=False, compare=False
+    )
     lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
     last_seen: float = field(
         default_factory=asyncio.get_event_loop().time, compare=False
     )
 
+    def __post_init__(self):
+        spawn_task_queue_worker(self.queue, self.lock, self.stop_event)
+
     def __hash__(self):
         return hash(self.uid)
+
+    def worker_done(self) -> None:
+        self.stop_event.set()
+        self.queue.put_nowait(None)
+
+    def put_task(self, task: Awaitable) -> None:
+        assert isinstance(task, Awaitable), "Task must be an Awaitable"
+        self.queue.put_nowait(task)
 
 
 @dataclass
@@ -102,6 +133,12 @@ class LIDService(AsyncResource):
             asr_options=self.__init_asr_options,
         )
         self.__reaper_task = asyncio.create_task(self.__reap_inactive_users())
+
+        # NOTE 임시 순서 보장
+        self._temp_q = asyncio.Queue()
+        self._temp_lock = asyncio.Lock()
+        self._temp_stop_event = asyncio.Event()
+        spawn_task_queue_worker(self._temp_q, self._temp_lock, self._temp_stop_event)
         return self
 
     @override
@@ -114,10 +151,14 @@ class LIDService(AsyncResource):
                 pass
             self.__reaper_task = None
 
+        # NOTE 임시 순서 보장
+        self._temp_stop_event.set()
+        self._temp_q.put_nowait(None)
+
         await super().shutdown(_)
         await self.lid.close()
 
-    async def ensure_group(self, gid: str) -> Group:
+    async def _ensure_group(self, gid: str) -> Group:
         group = self.groups.get(gid)
         if group is not None:
             return group
@@ -127,17 +168,18 @@ class LIDService(AsyncResource):
             await self.lid.register_group(gid)
             group = Group(gid=gid)
             self.groups[gid] = group
+            self.logger.debug(f"Registered groups: {self.groups}")
             return group
 
-    async def ensure_user(
+    async def _ensure_user(
         self,
         gid: str,
         uid: str,
         just_me: bool,
         initial_offset: int = 0,
-        callback: StreamCallback | None = None,
+        callback: StreamCallbackWrapper | None = None,
     ) -> User:
-        group = await self.ensure_group(gid)
+        group = await self._ensure_group(gid)
         user = self.users.get(uid)
         if user is not None:
             return user
@@ -154,44 +196,60 @@ class LIDService(AsyncResource):
 
                 group.users.add(user)
                 self.users[uid] = user
+                self.logger.debug(f"Registered users: {self.users}")
             return user
 
-    async def delete_group(self, gid: str) -> None:
-        group = self.groups.get(gid)
-        if group is None:
-            raise ValueError(f"Group {gid} does not exist")
+    async def _delete_group(self, gid: str) -> None:
+        if gid not in self.groups:
+            return
         async with self.__lock:
+            if gid not in self.groups:
+                return
+            group = self.groups[gid]
             async with group.lock:
                 if len(group.users) > 0:
-                    raise ValueError(f"Group {gid} is not empty")
-                await self.lid.unregister_group(gid)
+                    return
+                # NOTE 임시 순서 보장
+                self._temp_q.put_nowait(self.lid.unregister_group(gid))
                 del self.groups[gid]
+                self.logger.debug(f"Registered groups (remove): {self.groups}")
 
-    @overload
-    async def delete_user(self, uid: str) -> LIDSentence: ...
-    @overload
-    async def delete_user(self, uid: str, callback: StreamCallback) -> None: ...
-    async def delete_user(
-        self, uid: str, callback: StreamCallback | None = None
+    async def _delete_user(
+        self, uid: str, callback: StreamCallbackWrapper | None = None
     ) -> None | LIDSentence:
-        user = self.users.get(uid)
-        if user is None:
-            raise ValueError(f"User {uid} does not exist")
+        result = (
+            None
+            if callback is None
+            else LIDSentence(gid="", completed=[], candidate=[])
+        )
+        if uid not in self.users:
+            return result
         async with self.__lock:
-            result = None
+            if uid not in self.users:
+                return result
+            user = self.users[uid]
             async with user.group.lock:
                 # embedding_users는 사용자 삭제와 무관하게 유지
                 user.group.users.remove(user)
-                async with user.lock:
-                    if callback is None:
-                        completed, candidate = await self.lid.unregister_user(uid)
-                        result = LIDSentence(
-                            gid=user.group.gid, completed=completed, candidate=candidate
-                        )
-                    else:
-                        self.lid.unregister_user_callback(uid, callback)
+            async with user.lock:
+                user.worker_done()
+                if callback is None:
+                    completed, candidate = await self.lid.unregister_user(uid)
+                    result = LIDSentence(
+                        gid=user.group.gid, completed=completed, candidate=candidate
+                    )
+                else:
+                    task = task_with_callback(
+                        self.lid.unregister_user(uid), callback, self.logger
+                    )
+                    self._temp_q.put_nowait(task)
             del self.users[uid]
-            return result
+            self.logger.debug(f"Registered users (remove): {self.users}")
+
+        if len(user.group.users) == 0:
+            await self._delete_group(user.group.gid)
+
+        return result
 
     @overload
     async def embedding(self, uid: str, chunk: np.ndarray) -> Embedding: ...
@@ -202,6 +260,9 @@ class LIDService(AsyncResource):
     async def embedding(
         self, uid: str, chunk: np.ndarray, callback: EmbedCallback | None = None
     ) -> None | Embedding:
+        assert isinstance(uid, str), "UID must be a string"
+        assert isinstance(chunk, np.ndarray), "Chunk must be a numpy ndarray"
+
         # 단순히 임베딩만 반환하기 때문에 유저 따로 안만듬
         if chunk.ndim == 1:
             chunk = chunk.reshape(1, -1, 1)
@@ -209,10 +270,27 @@ class LIDService(AsyncResource):
             chunk = chunk.reshape(1, -1, chunk.shape[0])
 
         if callback:
-            self.lid.embedding_callback(chunk, self._embed_callback(uid, callback))
+            spawn_task_with_callback(
+                self.lid.embedding(chunk),
+                self._embed_callback(uid, callback),
+                self.logger,
+            )
         else:
-            embedding = await self.lid.embedding_wait(chunk)
+            embedding = await self.lid.embedding(chunk)
+            assert isinstance(
+                embedding, np.ndarray
+            ), "Embedding must be a numpy ndarray"
             return Embedding(uid=uid, embedding=embedding)
+
+    def _embed_callback(self, uid: str, callback: EmbedCallback):
+        async def wrapped(emb: np.ndarray | None, err: Exception | None):
+            if err is not None:
+                await callback(None, err)
+            else:
+                assert isinstance(emb, np.ndarray), "Embedding must be a numpy ndarray"
+                await callback(Embedding(uid, emb), None)
+
+        return wrapped
 
     @overload
     async def update_embedding(
@@ -224,9 +302,18 @@ class LIDService(AsyncResource):
         embeddings_members: list[str],
         embeddings: np.ndarray,
     ) -> None:
+        assert isinstance(gid, str), "GID must be a string"
+        assert isinstance(
+            embeddings_members, list
+        ), "embeddings_members must be a list of strings"
+        assert all(
+            isinstance(uid, str) for uid in embeddings_members
+        ), "All items in embeddings_members must be strings"
+        assert isinstance(embeddings, np.ndarray), "Embeddings must be a numpy ndarray"
+
         if embeddings.ndim != 2 or embeddings.shape[0] != len(embeddings_members):
             raise ValueError("Embeddings count does not match embeddings_members count")
-        group = await self.ensure_group(gid)
+        group = await self._ensure_group(gid)
 
         for uid in embeddings_members:
             user = self.users.get(uid)
@@ -242,7 +329,7 @@ class LIDService(AsyncResource):
         async with group.lock:
             group.embedding_uids = embeddings_members
             group.embeddings = embeddings
-            await self.lid.set_embedding_wait(gid, embeddings_members, embeddings)
+            await self.lid.set_embedding(gid, embeddings_members, embeddings)
 
     @overload
     async def run(self, chunk: np.ndarray) -> LIDSentence: ...
@@ -260,15 +347,46 @@ class LIDService(AsyncResource):
         language: str | None = None,
         callback: StreamCallback | None = None,
     ) -> None | LIDSentence:
+        assert isinstance(chunk, np.ndarray), "Chunk must be a numpy ndarray"
+        assert isinstance(
+            language, (str, type(None))
+        ), "Language must be a string or None"
+
         """
         단순 ASR 실행
         """
         if callback:
-            callback = self._run_asr_callback(callback)
-            self.lid.run_asr_callback(chunk, callback, language)
+            spawn_task_with_callback(
+                self.lid.run_asr(chunk, language),
+                self._run_asr_callback(callback),
+                self.logger,
+            )
         else:
             result = await self.lid.run_asr(chunk, language)
+            assert isinstance(result, list), "Result must be a list of Sentences"
+            assert all(
+                isinstance(s, Sentence) for s in result
+            ), "All items in result must be Sentences"
+
+            result = [SpeakerSentence.from_sentence(s, "", "") for s in result]
             return LIDSentence(gid="", completed=result, candidate=[])
+
+    def _run_asr_callback(self, callback: StreamCallback):
+        async def wrapped(c: list[Sentence] | None, err: Exception | None):
+            if err is not None:
+                await callback(None, err)
+            else:
+                assert isinstance(c, list), "Result must be a list of Sentences"
+                assert all(
+                    isinstance(s, Sentence) for s in c
+                ), "All items in result must be Sentences"
+
+                result = [SpeakerSentence.from_sentence(s, "", "") for s in c]
+                await callback(
+                    LIDSentence(gid="", completed=result, candidate=[]), None
+                )
+
+        return wrapped
 
     @overload
     async def stream(
@@ -309,32 +427,35 @@ class LIDService(AsyncResource):
         5. 콜백이 있으면 콜백으로 결과 전달, 없으면 결과 반환
         """
 
+        assert isinstance(gid, str), "GID must be a string"
+        assert isinstance(uid, str), "UID must be a string"
+        assert isinstance(
+            chunk, (np.ndarray, type(None))
+        ), "Chunk must be a numpy ndarray or None"
+        assert isinstance(
+            language, (str, type(None))
+        ), "Language must be a string or None"
+
         # NOTE 화자분리 성능이 별로면, 임베딩 업데이트 시, 그룹 재등록 시도해볼 것
         callback = (
             callback if callback is None else self._stream_callback(gid, callback)
         )
-        if uid not in self.users:
+        user = self.users.get(uid)
+        if user is None:
             initial_offset = initial_offset or 0
-            group = await self.ensure_group(gid)
+            group = await self._ensure_group(gid)
             if uid in group.embedding_uids:
                 # 사용자 등록 후 임베딩 전체  재등록
-                await self.ensure_user(gid, uid, False, initial_offset, callback)
-                await self.lid.set_embedding_wait(
+                user = await self._ensure_user(
+                    gid, uid, False, initial_offset, callback
+                )
+                await self.lid.set_embedding(
                     gid, group.embedding_uids, group.embeddings
                 )
             else:
-                await self.ensure_user(gid, uid, True, initial_offset, callback)
+                user = await self._ensure_user(gid, uid, True, initial_offset, callback)
 
-        user = self.users[uid]
-
-        if callback is None:
-            stream = self.lid.stream_asr if user.just_me else self.lid.stream
-        else:
-            stream = (
-                self.lid.stream_asr_callback
-                if user.just_me
-                else self.lid.stream_callback
-            )
+        stream = self.lid.stream_asr if user.just_me else self.lid.stream
 
         async with user.lock:
             user.last_seen = asyncio.get_event_loop().time()
@@ -355,27 +476,21 @@ class LIDService(AsyncResource):
             if callback is None:
                 completed, candidate = await stream(uid, chunk, language)
             else:
-                stream(uid, chunk, callback, language)
+                task = task_with_callback(
+                    stream(uid, chunk, language), callback, self.logger
+                )
+                user.put_task(task)
 
         if callback is None:
             result = LIDSentence(gid=gid, completed=completed, candidate=candidate)
             if end:
-                end_result = await self.delete_user(uid)
+                end_result = await self._delete_user(uid)
                 result.completed.extend(end_result.completed)
                 result.candidate.extend(end_result.candidate)
             return result
 
         if end:
-            await self.delete_user(uid, callback)
-
-    def _run_asr_callback(self, callback: StreamCallback):
-        async def wrapped(c: list[SpeakerSentence] | None, err: Exception | None):
-            if err is not None:
-                await callback(None, err)
-            else:
-                await callback(LIDSentence(gid="", completed=c, candidate=[]), None)
-
-        return wrapped
+            asyncio.create_task(self._delete_user(uid, callback))
 
     def _stream_callback(self, gid: str, callback: StreamCallback):
         async def wrapped(
@@ -385,18 +500,18 @@ class LIDService(AsyncResource):
             if err is not None:
                 await callback(None, err)
             else:
+                assert isinstance(result, tuple), "Result must be a tuple"
+                assert len(result) == 2, "Result tuple must have two elements"
+                assert all(
+                    isinstance(s, list) for s in result
+                ), "Both elements must be lists"
+                assert all(
+                    isinstance(s, SpeakerSentence) for t in result for s in t
+                ), "All items in result lists must be SpeakerSentences"
+
                 await callback(
                     LIDSentence(gid=gid, completed=result[0], candidate=result[1]), None
                 )
-
-        return wrapped
-
-    def _embed_callback(self, uid: str, callback: EmbedCallback):
-        async def wrapped(emb: np.ndarray | None, err: Exception | None):
-            if err is not None:
-                await callback(None, err)
-            else:
-                await callback(Embedding(uid, emb), None)
 
         return wrapped
 
@@ -412,7 +527,7 @@ class LIDService(AsyncResource):
                 ]
             for user in inactive_uids:
                 try:
-                    await self.delete_user(user.uid, user.callback)
+                    await self._delete_user(user.uid, user.callback)
                 except Exception:
                     pass
 

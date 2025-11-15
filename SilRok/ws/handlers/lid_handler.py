@@ -178,14 +178,14 @@ class LIDHandler:
     ):
         from SilRok.dto.response import LIDResponse, ErrorResponse
 
-        async def callback(Y: LIDSentence | None, err: Exception | None):
-            if err is not None:
-                self.logger.error(f"Error in lid stream callback:\n\t{err}")
-                await send(ErrorResponse(error=str(err)).to_bytes(dumps))
+        async def callback(Y: LIDSentence | None, e: Exception | None):
+            if e is not None:
+                self.logger.error(f"Error in lid stream callback:\n\t{e}")
+                await send(ErrorResponse(error=str(e)).to_bytes(dumps))
                 return
 
             if Y is not None:
-                self.logger.info(
+                self.logger.debug(
                     f"completed: {[(speak.order, speak.text) for speak in Y.completed]}\n-candidate: {[(speak.order, speak.text) for speak in Y.candidate]}"
                 )
 

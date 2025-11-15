@@ -162,7 +162,6 @@ class Session:
         while True:
             try:
                 byte = await web_socket.receive_bytes()
-                self.logger.debug(f"WebSocket received")
                 payload = Payload.from_bytes(byte, loads)
 
                 await self._on_metadata(sid, payload)
@@ -181,6 +180,8 @@ class Session:
                 data = await queue.get()
                 if data is None:
                     return
+                if isinstance(data, ErrorResponse):
+                    continue
                 await web_socket.send_bytes(data)
             except WebSocketDisconnect:
                 return

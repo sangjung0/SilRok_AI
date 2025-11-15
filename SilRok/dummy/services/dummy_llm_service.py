@@ -9,7 +9,7 @@ from typing_extensions import override
 from dataclasses import dataclass
 from dependency_injector.resources import AsyncResource
 
-from sjpy.asynchronous import callback_waiter
+from sjpy.asynchronous import spawn_task_with_callback
 
 from SilRok.services import LLMInput, LLMOutput
 
@@ -51,7 +51,7 @@ class DummyLLMService(AsyncResource):
         X: LLMInput,
         callback: Callable[[LLMOutput | None, Exception | None], Awaitable],
     ) -> None:
-        callback_waiter(self.request(X), callback)
+        spawn_task_with_callback(self.request(X), callback)
 
     async def request(self, X: LLMInput) -> LLMOutput | None:
         return DummyLLMOutput.create_random(X)
