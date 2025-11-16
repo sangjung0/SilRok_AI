@@ -1,6 +1,7 @@
 import base64
 
 from typing import Any, Callable
+from datetime import datetime
 from pydantic import BaseModel
 from pydantic import Field
 
@@ -29,6 +30,7 @@ class Sentence(BaseModel):
     words: list[Word]
     user_id: str = Field(default=None)
     audio_id: str = Field(default=None)
+    translated_time: str = Field(default_factory=lambda: datetime.now().isoformat())
 
     @staticmethod
     def from_speaker_sentence(sentence: SpeakerSentence):

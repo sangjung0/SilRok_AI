@@ -50,7 +50,9 @@ ARG CONTAINER_WORK_DIR
 ENV PYTHONPATH=${CONTAINER_WORK_DIR}
 CMD ["bash", "-c", " \
     cd ${CONTAINER_WORK_DIR} \
+    && sudo /workspaces/script/change_owner.sh ${CONTAINER_USER} \
+        --target ${CONTAINER_WORK_DIR}:${CONTAINER_WORK_DIR}/.keys \
+        --target ${CONTAINER_HOME} \
     && /workspaces/script/sync_uv.sh ${CONTAINER_WORK_DIR} ${CONTAINER_HOME} ${CONTAINER_UV_GROUP} \
     && source ${CONTAINER_WORK_DIR}/.server/.env \
-    && sudo chown -R ${CONTAINER_UID}:${CONTAINER_UID} ${CONTAINER_HOME} \
     && ${CONTAINER_WORK_DIR}/.venv/bin/python3 SilRok/main.py >> ${CONTAINER_WORK_DIR}/log/server.log 2>&1"]

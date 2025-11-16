@@ -31,7 +31,7 @@ LID_FLAGS = set(
 
 SAMPLE_RATE = config.service.common.sample_rate
 EMBEDDING_LENGTH = config.service.common.embedding_length
-MIN_DURATION = config.service.lid_service.minimum_chunk_duration
+MIN_DURATION = config.service.lid_service.minimum_embedding_chunk_duration
 
 
 @dataclass(frozen=True)
@@ -181,7 +181,7 @@ class LIDHandler:
         async def callback(Y: LIDSentence | None, e: Exception | None):
             if e is not None:
                 self.logger.error(f"Error in lid stream callback:\n\t{e}")
-                await send(ErrorResponse(error=str(e)).to_bytes(dumps))
+                # await send(ErrorResponse(error=str(e)).to_bytes(dumps))
                 return
 
             if Y is not None:
@@ -201,7 +201,7 @@ class LIDHandler:
         async def callback(Y: Embedding | None, e: Exception | None):
             if e is not None:
                 self.logger.error(f"Error in lid embed callback:\n\t{e}")
-                await send(ErrorResponse(error=str(e)).to_bytes(dumps))
+                # await send(ErrorResponse(error=str(e)).to_bytes(dumps))
                 return
             if Y is not None:
                 await send(LIDEmbedResponse.from_embedding(Y).to_bytes(dumps))

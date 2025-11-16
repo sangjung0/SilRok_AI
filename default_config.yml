@@ -3,7 +3,7 @@ SilRok:
         name: SilRok AI Server
         version: 2.0.0
     log:
-        level: 20 # INFO: 20, DEBUG: 10
+        level: 10 # INFO: 20, DEBUG: 10
         file_log_level: 10
         path: ${LOG_DIR:./log}
 
@@ -29,7 +29,13 @@ SilRok:
             diarizer_job_num: 2
             asr_job_num: 2
             minimum_chunk_duration: 48000
+            minimum_embedding_chunk_duration: 8000
             inactive_sec: 10
+            broker_options:
+                logger_options:
+                    level: 10
+                    path: ${LOG_DIR:./log}
+                    file_log_level: 10
         session:
             max_connection: 5
             max_send_queue_size: 100

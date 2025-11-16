@@ -2,6 +2,8 @@ from functools import lru_cache
 from dependency_injector import providers
 from dependency_injector.containers import DeclarativeContainer
 
+from sjpy.collection import namespace_to_dict
+
 from SilRok.core import config_dict, logger
 from SilRok.services import LLMService, LIDService
 from SilRok.usecase import LLMUC, LIDUC
@@ -33,9 +35,9 @@ class Container(DeclarativeContainer):
         asr_job_num=config.service.lid_service.asr_job_num,
         minimum_chunk_duration=config.service.lid_service.minimum_chunk_duration,
         inactive_sec=config.service.lid_service.inactive_sec,
-        broker_options=config.service.lid_service.broker_options,
-        diarizer_options=config.service.lid_service.diarizer_options,
-        asr_options=config.service.lid_service.asr_options,
+        broker_options=namespace_to_dict(config.service.lid_service.broker_options),
+        diarizer_options=namespace_to_dict(config.service.lid_service.diarizer_options),
+        asr_options=namespace_to_dict(config.service.lid_service.asr_options),
     )
 
     # usecase

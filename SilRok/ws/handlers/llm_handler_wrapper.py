@@ -154,7 +154,7 @@ class LLMHandlerWrapper(LIDHandler):
                 await send(LLMSummaryResponse.from_llm_output(Y).to_bytes(dumps))
             if e is not None:
                 self.logger.error(f"Error in llm summary callback:\n\t{e}")
-                await send(ErrorResponse(error=str(e)).to_bytes(dumps))
+                # await send(ErrorResponse(error=str(e)).to_bytes(dumps))
 
         return callback
 
@@ -168,7 +168,7 @@ class LLMHandlerWrapper(LIDHandler):
                 await send(LLMFeedbackResponse.from_llm_output(Y).to_bytes(dumps))
             if e is not None:
                 self.logger.error(f"Error in llm feedback callback:\n\t{e}")
-                await send(ErrorResponse(error=str(e)).to_bytes(dumps))
+                # await send(ErrorResponse(error=str(e)).to_bytes(dumps))
 
         return callback
 

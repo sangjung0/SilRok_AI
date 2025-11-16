@@ -169,8 +169,11 @@ class Session:
                 return
             except Exception as e:
                 self.logger.error(f"WebSocket error in {sid}:\n\t{e}")
-                await self.send_bytes(sid, ErrorResponse(error=str(e)).to_bytes(dumps))
-                if web_socket.client_state == WebSocketState.DISCONNECTED:
+                # await self.send_bytes(sid, ErrorResponse(error=str(e)).to_bytes(dumps))
+                if (
+                    web_socket.client_state != WebSocketState.CONNECTED
+                    or web_socket.client_state == WebSocketState.DISCONNECTED
+                ):
                     return
 
     async def _send_loop(self, web_socket: WebSocket, sid: str):
@@ -180,14 +183,15 @@ class Session:
                 data = await queue.get()
                 if data is None:
                     return
-                if isinstance(data, ErrorResponse):
-                    continue
                 await web_socket.send_bytes(data)
             except WebSocketDisconnect:
                 return
             except Exception as e:
                 self.logger.error(f"WebSocket send error in {sid}:\n\t{e}")
-                if web_socket.client_state == WebSocketState.DISCONNECTED:
+                if (
+                    web_socket.client_state != WebSocketState.CONNECTED
+                    or web_socket.client_state == WebSocketState.DISCONNECTED
+                ):
                     return
 
     async def disconnect(
