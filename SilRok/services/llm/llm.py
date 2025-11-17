@@ -6,7 +6,7 @@ from collections import defaultdict
 from sjpy.collection import LRUDict
 
 from SilRok.services.llm.data import LLMInput, LLMContext, LLMOutput
-from SilRok.services.llm.data.flag import UPDATE
+from SilRok.services.llm.data.flag import UPDATE, FEEDBACK
 
 
 @ray.remote(num_cpus=1)
@@ -85,7 +85,13 @@ class LLM:
                 self.logger.debug(f"Prompt: {prompt}")
                 self.logger.debug(f"Response: {response.text}")
 
-                return LLMOutput.builder(X.tid, response.text)
+                llm_output = LLMOutput.builder(X.tid, response.text)
+                text = llm_output.summary.string.strip().lower()
+                if context.mode == FEEDBACK and (text == "x" or len(text) == 0):
+                    print(f"Feedback ignored {text}")
+                    return None
+                return llm_output
+
             except Exception as e:
                 self.logger.error(f"LLM processing error: {e}")
                 raise e

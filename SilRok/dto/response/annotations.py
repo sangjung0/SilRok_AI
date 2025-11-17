@@ -27,41 +27,12 @@ UserId = Annotated[
     ),
 ]
 
-Agenda = Annotated[
-    list[int],
+UserIds = Annotated[
+    list[UserId],
     Field(
-        title="agenda list index",
-        description="완료된 아젠다 인덱스를 반환, 0부터 시작",
-        example=[0, 1, 2],
-    ),
-]
-
-Context = Annotated[
-    str,
-    Field(
-        title="context",
-        max_length=1024,
-        description="LLM이 생성한 대화 요약, 최대 출력 토큰 1024",
-        example="회의 요약 내용",
-    ),
-]
-
-Feedback = Annotated[
-    list[dict[str, str]],
-    Field(
-        title="feedback",
-        max_length=1024,
-        description="LLM이 생성한 발화자 피드백, 최대 출력 토큰 1024",
-        example=[
-            {
-                "name": "발화자1",
-                "comment": "발화자1의 피드백 내용",
-            },
-            {
-                "name": "발화자2",
-                "comment": "발화자2의 피드백 내용",
-            },
-        ],
+        title="user_ids",
+        description="화자 고유 ID 목록",
+        example=["User123", "User456"],
     ),
 ]
 
@@ -75,12 +46,42 @@ Embedding = Annotated[
     ),
 ]
 
+Agenda = Annotated[
+    list[int],
+    Field(
+        title="agenda list index",
+        description="완료된 아젠다 인덱스를 반환, 0부터 시작",
+        example=[0, 1, 2],
+    ),
+]
+
+Summary = Annotated[
+    str,
+    Field(
+        title="summary",
+        max_length=1024 * 8,
+        description="LLM이 생성한 대화 요약",
+        example="회의 요약 내용",
+    ),
+]
+
+
+Feedback = Annotated[
+    str,
+    Field(
+        title="feedback",
+        max_length=1024 * 8,
+        description="LLM이 생성한 발화자 피드백",
+        example="발화자1의 피드백 내용",
+    ),
+]
+
 
 __all__ = [
     "GroupId",
     "UserId",
     "Agenda",
-    "Context",
+    "Summary",
     "Feedback",
     "Embedding",
 ]

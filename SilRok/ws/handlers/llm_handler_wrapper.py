@@ -87,11 +87,11 @@ class LLMHandlerWrapper(LIDHandler):
         send, callbacks = await super().on_connect(session, sid)
 
         dumps = session.get_serializer(sid)["dumps"]
-        response_callback = self._llm_summary_callback(send, dumps)
-        summary_callback = self._llm_feedback_callback(send, dumps)
+        summary_callback = self._llm_summary_callback(send, dumps)
+        feedback_callback = self._llm_feedback_callback(send, dumps)
 
-        callbacks[LLM_METADATA] = response_callback
-        callbacks[LLM_FEEDBACK] = response_callback
+        callbacks[LLM_METADATA] = feedback_callback
+        callbacks[LLM_FEEDBACK] = feedback_callback
         callbacks[LLM_SUMMARY] = summary_callback
 
         return send, callbacks

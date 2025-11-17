@@ -1,7 +1,7 @@
 # services/__init__.py
 
 from SilRok.services.lid_service import LIDService, Embedding, LIDSentence
-from SilRok.services.llm import LLMService, LLMInput, LLMOutput, flag as llm_mode
+from SilRok.services.llm import LLMService, LLMInput, LLMOutput, flag as llm_mode, LLMOutputTemplate
 
 __all__ = [
     "LIDService",
@@ -10,5 +10,6 @@ __all__ = [
     "LLMInput",
     "LLMOutput",
     "llm_mode",
+    "LLMOutputTemplate",
     "LIDSentence",
 ]
