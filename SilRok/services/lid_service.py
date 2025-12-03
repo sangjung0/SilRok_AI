@@ -46,12 +46,18 @@ class LIDSentence:
 
 @dataclass
 class User:
-    uid: str = field(compare=True)
-    group: "Group" = field(compare=False)
-    just_me: bool = field(compare=False)  # 화자 분리 없이, 소스 오디오 = 화자일 경우
-    chunk: np.ndarray = field(default_factory=generate_empty_chunk, compare=False)
+    uid: str = field(compare=True, repr=True)
+    group: "Group" = field(compare=False, repr=False)
+    just_me: bool = field(
+        compare=False, repr=False
+    )  # 화자 분리 없이, 소스 오디오 = 화자일 경우
+    chunk: np.ndarray = field(
+        default_factory=generate_empty_chunk, compare=False, repr=False
+    )
     # 여기 콜백 등록하는게 별로긴한데, 요청마다 응답이 가는게 아니기 때문에, 어쩔 수 없다.
-    callback: StreamCallbackWrapper | None = field(default=None, compare=False)
+    callback: StreamCallbackWrapper | None = field(
+        default=None, compare=False, repr=False
+    )
     # 일단 큐 크기제한 하지 않음
     queue: asyncio.Queue[Awaitable | None] = field(
         default_factory=asyncio.Queue, repr=False, compare=False
@@ -61,7 +67,7 @@ class User:
     )
     lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
     last_seen: float = field(
-        default_factory=asyncio.get_event_loop().time, compare=False
+        default_factory=asyncio.get_event_loop().time, compare=False, repr=False
     )
 
     def __post_init__(self):
@@ -81,12 +87,12 @@ class User:
 
 @dataclass
 class Group:
-    gid: str = field(compare=True)
+    gid: str = field(compare=True, repr=True)
     users: set[User] = field(
-        default_factory=set, init=False, compare=False
+        default_factory=set, init=False, compare=False, repr=True
     )  # 그룹에 속한 유저
     embedding_uids: list[str] = field(
-        default_factory=list, init=False, compare=False
+        default_factory=list, init=False, compare=False, repr=True
     )  # 화자 분리할 유저 리스트 (순서 = embeddings 순서)
     embeddings: np.ndarray | None = field(default=None, repr=False, compare=False)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
@@ -165,6 +171,7 @@ class LIDService(AsyncResource):
         async with self.__lock:
             if gid in self.groups:
                 return self.groups[gid]
+            # 이게 진짜 운에 맡기는거다. 필수로 해결해야한다
             await self.lid.register_group(gid)
             group = Group(gid=gid)
             self.groups[gid] = group
@@ -190,6 +197,7 @@ class LIDService(AsyncResource):
 
             async with group.lock:
                 if just_me:
+                    # 이 register user 가 진짜 운에 맡기는거다. 필수로 해결해야한다
                     await self.lid.register_user(uid, None, initial_offset)
                 else:
                     await self.lid.register_user(uid, gid, initial_offset)
@@ -490,7 +498,7 @@ class LIDService(AsyncResource):
             return result
 
         if end:
-            asyncio.create_task(self._delete_user(uid, callback))
+            await self._delete_user(uid, callback)
 
     def _stream_callback(self, gid: str, callback: StreamCallback):
         async def wrapped(

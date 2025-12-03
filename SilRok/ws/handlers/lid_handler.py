@@ -64,7 +64,7 @@ class LIDPayload:
 
     @cached_property
     def language(self):
-        return self.payload.metadata.get("language", None)
+        return self.payload.metadata.get("language", "ko")
 
     @cached_property
     def sample_rate(self):
@@ -78,7 +78,7 @@ class LIDPayload:
             audio = mp4_bytes_to_ndarray(self.payload.data, SAMPLE_RATE)
             if audio.shape[0] < MIN_DURATION:
                 raise ValueError(
-                    f"Audio length {audio.shape[0]} is less than minimum required duration {MIN_DURATION}"
+                    f"Audio length {audio.shape[0]} is less than minimum required duration {MIN_DURATION}, {audio.shape[0]/SAMPLE_RATE} sec, {audio.shape}, {audio.dtype}, {audio.min()}, {audio.max()}\n\t{self.payload.data}"
                 )
         else:
             # 흠

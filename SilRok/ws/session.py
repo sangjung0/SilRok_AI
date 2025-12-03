@@ -12,6 +12,8 @@ from logging import Logger
 from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 
+from sjpy.excptn import exc_to_str
+
 from SilRok.dto.response import ErrorResponse
 
 OnMetadata = Callable[[Self, str, "Payload"], Awaitable[None]]
@@ -90,6 +92,7 @@ class Session:
         self.__on_disconnect_handlers: dict[
             str, Callable[[Self, str], Awaitable[None]]
         ] = {}
+        self.__events: dict[str, asyncio.Event] = {}
 
     @property
     def available_connections(self) -> int:
@@ -140,6 +143,18 @@ class Session:
         if sid in self.__on_disconnect_handlers:
             del self.__on_disconnect_handlers[sid]
 
+    def _get_event(self, sid: str) -> asyncio.Event:
+        if sid not in self.__events:
+            self.__events[sid] = asyncio.Event()
+        return self.__events[sid]
+
+    def _set_event(self, sid: str) -> None:
+        self._get_event(sid).set()
+
+    def _del_event(self, sid: str) -> None:
+        if sid in self.__events:
+            del self.__events[sid]
+
     async def _on_metadata(self, sid: str, payload: Payload):
         handler = self.__on_metadata_handlers.get(sid)
         if handler:
@@ -159,26 +174,31 @@ class Session:
         serializer = self.get_serializer(sid)
         loads = serializer["loads"]
         dumps = serializer["dumps"]
-        while True:
+        event = self._get_event(sid)
+        while event.is_set() is False:
             try:
                 byte = await web_socket.receive_bytes()
+                self.logger.debug(f"WebSocket received {len(byte)} bytes in {sid}")
                 payload = Payload.from_bytes(byte, loads)
 
                 await self._on_metadata(sid, payload)
             except WebSocketDisconnect:
                 return
             except Exception as e:
-                self.logger.error(f"WebSocket error in {sid}:\n\t{e}")
+                self.logger.error(
+                    f"WebSocket ({web_socket.client_state} | {web_socket.application_state}) error in {sid}:\n\t{exc_to_str(e)}"
+                )
                 # await self.send_bytes(sid, ErrorResponse(error=str(e)).to_bytes(dumps))
                 if (
                     web_socket.client_state != WebSocketState.CONNECTED
-                    or web_socket.client_state == WebSocketState.DISCONNECTED
+                    or web_socket.application_state != WebSocketState.CONNECTED
                 ):
                     return
 
     async def _send_loop(self, web_socket: WebSocket, sid: str):
         queue = self.get_send_queue(sid)
-        while True:
+        event = self._get_event(sid)
+        while event.is_set() is False:
             try:
                 data = await queue.get()
                 if data is None:
@@ -187,10 +207,12 @@ class Session:
             except WebSocketDisconnect:
                 return
             except Exception as e:
-                self.logger.error(f"WebSocket send error in {sid}:\n\t{e}")
+                self.logger.error(
+                    f"WebSocket ({web_socket.client_state} | {web_socket.application_state}) send error in {sid}:\n\t{exc_to_str(e)}"
+                )
                 if (
                     web_socket.client_state != WebSocketState.CONNECTED
-                    or web_socket.client_state == WebSocketState.DISCONNECTED
+                    or web_socket.application_state != WebSocketState.CONNECTED
                 ):
                     return
 
@@ -210,8 +232,12 @@ class Session:
         if send_task is not None and not send_task.done():
             await self.send_bytes(sid, None)
 
+        self.logger.debug(
+            f"WebSocket state in {sid}: {web_socket.client_state} | {web_socket.application_state}"
+        )
         if web_socket.client_state == WebSocketState.CONNECTED:
             try:
+                # self._set_event(sid)
                 await web_socket.close()
             except Exception as e:
                 self.logger.error(f"WebSocket close error in {sid}:\n\t{e}")
@@ -224,6 +250,7 @@ class Session:
                 task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
+        self._del_event(sid)
         self.detach_on_connect(sid)
         self.detach_on_metadata(sid)
         self.detach_on_disconnect(sid)
@@ -265,9 +292,7 @@ class Session:
             receive_task = asyncio.create_task(self._receive_loop(web_socket, sid))
             tasks = [send_task, receive_task]
             if keep_alive:
-                keep_alive_task = asyncio.create_task(
-                    self._keep_alive_loop(web_socket), name=f"{sid}:kpal"
-                )
+                keep_alive_task = asyncio.create_task(self._keep_alive_loop(web_socket))
                 tasks.append(keep_alive_task)
 
             if on_metadata is not None:

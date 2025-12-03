@@ -151,6 +151,7 @@ class LLMHandlerWrapper(LIDHandler):
 
         async def callback(Y: LLMOutput | None, e: Exception | None):
             if Y is not None:
+                self.logger.debug(f"LLM Summary Output: {Y}")
                 await send(LLMSummaryResponse.from_llm_output(Y).to_bytes(dumps))
             if e is not None:
                 self.logger.error(f"Error in llm summary callback:\n\t{e}")
@@ -165,6 +166,7 @@ class LLMHandlerWrapper(LIDHandler):
 
         async def callback(Y: LLMOutput | None, e: Exception | None):
             if Y is not None:
+                self.logger.debug(f"LLM Feedback Output: {Y}")
                 await send(LLMFeedbackResponse.from_llm_output(Y).to_bytes(dumps))
             if e is not None:
                 self.logger.error(f"Error in llm feedback callback:\n\t{e}")
